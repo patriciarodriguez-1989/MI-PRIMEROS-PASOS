@@ -1,14 +1,78 @@
-name: Mi primer CI
+name: Pipeline de calidad y pruebas
 
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
 
 jobs:
-  prueba:
+  calidad:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Mostrar mensaje
-        run: echo "Hola, este es mi primer pipeline"
-        
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar linter
+        run: ruff check .
+
+  pruebas:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar pruebas y cobertura
+        run: pytest --cov=src --cov-report=xml --cov-report=term
+
+      - name: Subir reporte de cobertura
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-${{ matrix.python-version }}
+          path: coverage.xml
+
+  empaquetar:
+    runs-on: ubuntu-latest
+    needs: [calidad, pruebas]
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Crear paquete
+        run: |
+          mkdir paquete
+          cp -r src paquete/
+          cp README.md paquete/
+
+      - name: Publicar artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: paquete-final
+          path: paquete/
